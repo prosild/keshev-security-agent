@@ -44,8 +44,26 @@ const DECISION_MAP = Object.freeze({
   },
 });
 
+const ACCESS_STATE_MAP = Object.freeze({
+  allowed: { label: '허용됨', tone: 'ok', className: 'state state-ok' },
+  denied: { label: '거부됨', tone: 'alert', className: 'state state-error' },
+  unknown: { label: '확인 불가', tone: 'unknown', className: 'state state-empty' },
+});
+
+const EVENT_KIND_MAP = Object.freeze({
+  access: '접속 기록',
+  xdr: 'XDR 경보',
+});
+
+const eventsViewState = {
+  lastDataSignature: null,
+  filters: { kind: 'all', appId: 'all', access: 'all' },
+  selectedEventId: null,
+};
+
 function createEl(tag, options = {}, children = []) {
   const node = document.createElement(tag);
+  if (options.type) node.setAttribute('type', String(options.type));
   if (options.className) node.className = options.className;
   if (options.text != null) node.textContent = String(options.text);
   if (options.attrs) {
@@ -226,6 +244,111 @@ function formatCheckedAt(value) {
   return `${new Date(parsed).toLocaleString('ko-KR')} (${value})`;
 }
 
+function resetEventsViewState() {
+  eventsViewState.lastDataSignature = null;
+  eventsViewState.filters = { kind: 'all', appId: 'all', access: 'all' };
+  eventsViewState.selectedEventId = null;
+}
+
+function getKindLabel(kind) {
+  return Object.hasOwn(EVENT_KIND_MAP, kind) ? `${EVENT_KIND_MAP[kind]} (${kind})` : `확인 불가 (${String(kind || 'unknown')})`;
+}
+
+function formatAppIdText(appId) {
+  return typeof appId === 'string' && appId.trim().length > 0 ? appId : '앱 확인 불가 (appId 없음)';
+}
+
+function sortEventsLatestFirst(events) {
+  return [...events].sort((a, b) => {
+    const tA = Date.parse(a?.at);
+    const tB = Date.parse(b?.at);
+    const validA = Number.isFinite(tA);
+    const validB = Number.isFinite(tB);
+    if (validA && validB) return tB - tA;
+    if (validA) return -1;
+    if (validB) return 1;
+    return 0;
+  });
+}
+
+function createFilterSelect(labelText, selectId, values, currentValue, formatOption, onChange) {
+  const wrapper = createEl('label', { className: 'row', attrs: { for: selectId } }, [
+    createEl('span', { className: 'muted', text: labelText }),
+  ]);
+  const select = createEl('select', {
+    className: 'btn',
+    attrs: { id: selectId, 'aria-label': labelText },
+  });
+
+  const allOption = createEl('option', { text: '전체', attrs: { value: 'all' } });
+  select.appendChild(allOption);
+
+  for (const val of values) {
+    const opt = createEl('option', { text: formatOption(val), attrs: { value: val } });
+    select.appendChild(opt);
+  }
+  select.value = values.includes(currentValue) ? currentValue : 'all';
+  select.addEventListener('change', () => onChange(select.value));
+
+  wrapper.appendChild(select);
+  return wrapper;
+}
+
+function renderEventDetailPanel(event) {
+  const panel = createEl('section', {
+    className: 'card',
+    attrs: { 'data-student-event-detail': event.id },
+  });
+
+  panel.appendChild(createEl('h4', { text: `사건 상세 · ${event.id}` }));
+
+  const metaList = createEl('dl', { className: 'kv' });
+  metaList.appendChild(createEl('dt', { text: '사건 ID' }));
+  metaList.appendChild(createEl('dd', { text: event.id }));
+  metaList.appendChild(createEl('dt', { text: '종류' }));
+  metaList.appendChild(createEl('dd', { text: getKindLabel(event.kind) }));
+  metaList.appendChild(createEl('dt', { text: '업무 앱' }));
+  metaList.appendChild(createEl('dd', { text: formatAppIdText(event.appId) }));
+  metaList.appendChild(createEl('dt', { text: '시각' }));
+  metaList.appendChild(createEl('dd', { text: formatCheckedAt(event.at) }));
+  metaList.appendChild(createEl('dt', { text: '요약' }));
+  metaList.appendChild(createEl('dd', { text: event.summary || '요약 없음' }));
+  panel.appendChild(metaList);
+
+  const stateList = createEl('dl', { className: 'kv' });
+  stateList.appendChild(createEl('dt', { text: '접속 상태' }));
+  stateList.appendChild(createEl('dd', {}, [createStatusBadge(ACCESS_STATE_MAP, event?.state?.access, 'access')]));
+  stateList.appendChild(createEl('dt', { text: '세션 상태' }));
+  stateList.appendChild(createEl('dd', {}, [createStatusBadge(SESSION_STATUS_MAP, event?.state?.session, 'session')]));
+  stateList.appendChild(createEl('dt', { text: '기기 상태' }));
+  stateList.appendChild(createEl('dd', {}, [createStatusBadge(DEVICE_STATUS_MAP, event?.state?.device, 'device')]));
+  panel.appendChild(stateList);
+
+  const renderNamedRows = (heading, rows, emptyMsg) => {
+    const block = createEl('div', { className: 'event-block' });
+    block.appendChild(createEl('h4', { text: heading }));
+    if (!Array.isArray(rows) || rows.length === 0) {
+      block.appendChild(createEl('p', { className: 'muted', text: emptyMsg }));
+      return block;
+    }
+    const ul = createEl('ul');
+    for (const row of rows) {
+      const idPart = row?.id || 'unknown';
+      const textPart = row?.text || '내용 없음';
+      ul.appendChild(createEl('li', { text: `${idPart}: ${textPart}` }));
+    }
+    block.appendChild(ul);
+    return block;
+  };
+
+  panel.appendChild(createEl('div', { className: 'grid-2' }, [
+    renderNamedRows('근거 (evidence)', event.evidence, '등록된 근거가 없습니다.'),
+    renderNamedRows('규칙 (rules)', event.rules, '적용된 규칙이 없습니다.'),
+  ]));
+
+  return panel;
+}
+
 export function createStudentView() {
   return {
     renderIdentity(input) {
@@ -333,7 +456,172 @@ export function createStudentView() {
 
       return container;
     },
-    renderEvents() { return '학생 구현 대기: 본인 접속·XDR 기록을 연결하세요.'; },
+    renderEvents(input) {
+      const payload = input && typeof input === 'object' ? input : {};
+      const status = payload.status || 'unknown';
+      const mode = normalizeMode(payload.mode);
+
+      const container = createEl('div', {
+        attrs: {
+          'data-student-events': 'rendered',
+          'data-student-status': status,
+          'data-student-mode': mode,
+        },
+      });
+
+      container.appendChild(createEl('div', { className: 'row' }, [
+        createEl('h3', { text: '접속 기록 · XDR 경보' }),
+        createModeBadge(mode),
+      ]));
+
+      if (status === 'loading') {
+        resetEventsViewState();
+        container.appendChild(createEl('p', {
+          className: 'state state-loading',
+          text: `불러오는 중 (${MODE_LABELS[mode]})`,
+          attrs: { role: 'status' },
+        }));
+        return container;
+      }
+
+      if (status === 'error') {
+        resetEventsViewState();
+        const code = payload?.error?.code;
+        const message = typeof payload?.error?.message === 'string' && payload.error.message.trim().length > 0
+          ? payload.error.message
+          : '서버 응답을 확인할 수 없습니다.';
+        const prefix = code === 'CONTRACT_MISMATCH' || code === 'ENGINE_RESULT_UNVERIFIED'
+          ? '확인 불가'
+          : '기록을 불러오지 못했습니다';
+        container.appendChild(createEl('p', {
+          className: 'state state-error',
+          text: `${prefix}: ${message} · ${MODE_LABELS[mode]}`,
+          attrs: { role: 'alert', 'data-student-events-state': 'error' },
+        }));
+        return container;
+      }
+
+      if (status !== 'ok' || !Array.isArray(payload.data)) {
+        resetEventsViewState();
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: `확인 불가: 기록 목록 형식이 올바르지 않습니다. (${MODE_LABELS[mode]})`,
+          attrs: { 'data-student-events-state': 'unverifiable' },
+        }));
+        return container;
+      }
+
+      if (payload.data.length === 0) {
+        resetEventsViewState();
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: `표시할 기록이 없습니다. (${MODE_LABELS[mode]})`,
+          attrs: { 'data-student-events-state': 'empty' },
+        }));
+        return container;
+      }
+
+      const signature = JSON.stringify(payload.data);
+      if (eventsViewState.lastDataSignature !== signature) {
+        eventsViewState.lastDataSignature = signature;
+        eventsViewState.filters = { kind: 'all', appId: 'all', access: 'all' };
+        eventsViewState.selectedEventId = null;
+      }
+
+      const sorted = sortEventsLatestFirst(payload.data);
+      const kindValues = [...new Set(['access', 'xdr', ...sorted.map((e) => e?.kind).filter((v) => typeof v === 'string' && v.length > 0)])];
+      const appValues = [...new Set(sorted.map((e) => e?.appId).filter((v) => typeof v === 'string' && v.length > 0))];
+      const accessValues = [...new Set(['allowed', 'denied', 'unknown', ...sorted.map((e) => e?.state?.access).filter((v) => typeof v === 'string' && v.length > 0)])];
+
+      const countSummary = createEl('p', { className: 'muted' });
+      const listRegion = createEl('div');
+      const detailRegion = createEl('div');
+
+      const renderFiltered = () => {
+        const { kind, appId, access } = eventsViewState.filters;
+        const filtered = sorted.filter((ev) => {
+          if (kind !== 'all' && ev?.kind !== kind) return false;
+          if (appId !== 'all' && ev?.appId !== appId) return false;
+          if (access !== 'all' && ev?.state?.access !== access) return false;
+          return true;
+        });
+
+        countSummary.textContent = `표시 건수: ${filtered.length}건 / 전체 ${sorted.length}건 (최근 최대 40건 범위)`;
+
+        listRegion.textContent = '';
+        if (filtered.length === 0) {
+          listRegion.appendChild(createEl('p', {
+            className: 'state state-empty',
+            text: '선택한 필터 조건에 맞는 기록이 없습니다.',
+          }));
+        } else {
+          const ul = createEl('ul', { className: 'records' });
+          for (const ev of filtered) {
+            const eventId = typeof ev?.id === 'string' && ev.id.length > 0 ? ev.id : 'unknown';
+            const detailBtn = createEl('button', {
+              type: 'button',
+              className: 'btn',
+              text: `${eventId} 상세`,
+              attrs: { 'aria-expanded': eventsViewState.selectedEventId === eventId ? 'true' : 'false' },
+            });
+            detailBtn.addEventListener('click', () => {
+              eventsViewState.selectedEventId = eventsViewState.selectedEventId === eventId ? null : eventId;
+              renderFiltered();
+            });
+
+            const li = createEl('li', {
+              className: 'event',
+              attrs: { 'data-student-event-id': eventId },
+            }, [
+              createEl('div', { className: 'event-head' }, [
+                createEl('h4', { text: ev?.summary || '요약 없음' }),
+                createEl('span', { className: 'tag', text: getKindLabel(ev?.kind) }),
+              ]),
+              createEl('p', {
+                className: 'muted',
+                text: `사건 ID: ${eventId} · 시각: ${formatCheckedAt(ev?.at)} · 앱: ${formatAppIdText(ev?.appId)}`,
+              }),
+              createEl('div', { className: 'event-actions' }, [detailBtn]),
+            ]);
+            ul.appendChild(li);
+          }
+          listRegion.appendChild(ul);
+        }
+
+        detailRegion.textContent = '';
+        if (eventsViewState.selectedEventId) {
+          const selected = filtered.find((ev) => ev?.id === eventsViewState.selectedEventId);
+          if (selected) {
+            detailRegion.appendChild(renderEventDetailPanel(selected));
+          }
+        }
+      };
+
+      const filterBar = createEl('div', { className: 'row' }, [
+        createFilterSelect('기록 종류', 'student-filter-kind', kindValues, eventsViewState.filters.kind, getKindLabel, (val) => {
+          eventsViewState.filters.kind = val;
+          renderFiltered();
+        }),
+        createFilterSelect('업무 앱', 'student-filter-app', appValues, eventsViewState.filters.appId, (v) => v, (val) => {
+          eventsViewState.filters.appId = val;
+          renderFiltered();
+        }),
+        createFilterSelect('접속 상태', 'student-filter-access', accessValues, eventsViewState.filters.access, (v) => {
+          return Object.hasOwn(ACCESS_STATE_MAP, v) ? `${ACCESS_STATE_MAP[v].label} (${v})` : `확인 불가 (${v})`;
+        }, (val) => {
+          eventsViewState.filters.access = val;
+          renderFiltered();
+        }),
+      ]);
+
+      container.appendChild(filterBar);
+      container.appendChild(countSummary);
+      container.appendChild(listRegion);
+      container.appendChild(detailRegion);
+
+      renderFiltered();
+      return container;
+    },
     renderStatus() { return '학생 구현 대기: 기기·세션·알림과 연결 점검 상태를 구분하세요.'; },
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·OSV 출처·조회 시각·부분 결과·조회 실패를 구분하세요.'; },
     renderAiConnection() { return '학생 구현 대기: 모델 응답 점검과 실제 사건 설명을 구분하고 AI 오류·취소·수동 복구를 안내하세요.'; },
