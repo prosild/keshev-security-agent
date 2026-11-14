@@ -21,6 +21,29 @@ const SESSION_STATUS_MAP = Object.freeze({
   unknown: { label: '확인 불가', tone: 'unknown', className: 'state state-empty' },
 });
 
+const DECISION_MAP = Object.freeze({
+  allow: {
+    label: '접근 허용',
+    className: 'decision decision-allow',
+    note: '정책상 접근 허용 판정입니다. 실제 앱 접속 성공을 보장하지는 않습니다.',
+  },
+  deny: {
+    label: '접근 거부',
+    className: 'decision decision-deny',
+    note: '정책상 접근 거부 판정입니다.',
+  },
+  challenge: {
+    label: '추가 인증 또는 확인 필요',
+    className: 'decision decision-challenge',
+    note: '추가 확인이 필요합니다. 이 앱이 추가 인증 절차를 대신 수행하지 않습니다.',
+  },
+  unknown: {
+    label: '판정 확인 불가',
+    className: 'decision decision-unknown',
+    note: '판정을 확인할 수 없습니다. 허용됨(allow)이 아닙니다.',
+  },
+});
+
 function createEl(tag, options = {}, children = []) {
   const node = document.createElement(tag);
   if (options.className) node.className = options.className;
@@ -196,6 +219,13 @@ function renderSessionsContent(data) {
   return ul;
 }
 
+function formatCheckedAt(value) {
+  if (typeof value !== 'string' || value.trim().length === 0) return '확인 불가';
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return `${new Date(parsed).toLocaleString('ko-KR')} (${value})`;
+}
+
 export function createStudentView() {
   return {
     renderIdentity(input) {
@@ -210,7 +240,99 @@ export function createStudentView() {
 
       return container;
     },
-    renderDecision() { return '학생 구현 대기: 서버의 판정과 이유를 연결하세요.'; },
+    renderDecision(input) {
+      const payload = input && typeof input === 'object' ? input : {};
+      const status = payload.status || 'unknown';
+      const mode = normalizeMode(payload.mode);
+      const targetAppId = typeof payload.appId === 'string' && payload.appId.trim().length > 0 ? payload.appId : null;
+
+      const container = createEl('div', {
+        attrs: {
+          'data-student-decision': 'rendered',
+          'data-student-status': status,
+          'data-student-mode': mode,
+        },
+      });
+
+      const header = createEl('div', { className: 'row' }, [
+        createEl('h3', { text: '업무 앱 접속 판정' }),
+        createModeBadge(mode),
+      ]);
+      container.appendChild(header);
+
+      if (status === 'idle') {
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: `앱을 골라 접속을 요청하세요. (${MODE_LABELS[mode]})`,
+        }));
+        return container;
+      }
+
+      if (status === 'loading') {
+        const prefix = targetAppId ? `${targetAppId} ` : '';
+        container.appendChild(createEl('p', {
+          className: 'state state-loading',
+          text: `${prefix}판정 확인 중 (${MODE_LABELS[mode]})`,
+          attrs: { role: 'status' },
+        }));
+        return container;
+      }
+
+      if (status === 'error') {
+        const message = typeof payload?.error?.message === 'string' && payload.error.message.trim().length > 0
+          ? payload.error.message
+          : '서버 응답을 확인할 수 없습니다.';
+        container.appendChild(createEl('p', {
+          className: 'decision decision-failed',
+          text: `요청 실패: ${message} · ${MODE_LABELS[mode]}`,
+          attrs: { role: 'alert', 'data-student-decision-state': 'error' },
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '요청 실패는 접근 거부(deny)나 허용(allow) 판정이 아닙니다.',
+        }));
+        return container;
+      }
+
+      if (status !== 'ok' || !payload.data || typeof payload.data !== 'object') {
+        container.appendChild(createEl('p', {
+          className: 'decision decision-unknown',
+          text: `판정 확인 불가 (unknown) · 허용됨(allow)이 아닙니다. (${MODE_LABELS[mode]})`,
+          attrs: { 'data-student-decision-state': 'unknown' },
+        }));
+        return container;
+      }
+
+      const data = payload.data;
+      const decisionKey = typeof data.decision === 'string' && Object.hasOwn(DECISION_MAP, data.decision)
+        ? data.decision
+        : 'unknown';
+      const info = DECISION_MAP[decisionKey];
+      const appIdText = typeof data.appId === 'string' && data.appId.trim().length > 0
+        ? data.appId
+        : (targetAppId || '확인 불가');
+      const reasonText = typeof data.reason === 'string' && data.reason.trim().length > 0
+        ? data.reason
+        : '판정 이유 정보 없음';
+
+      container.appendChild(createEl('p', {
+        className: info.className,
+        text: `${info.label} (${decisionKey})`,
+        attrs: { 'data-student-decision-state': decisionKey },
+      }));
+      container.appendChild(createEl('p', { className: 'muted', text: info.note }));
+
+      const details = createEl('dl', { className: 'kv' });
+      details.appendChild(createEl('dt', { text: '업무 앱' }));
+      details.appendChild(createEl('dd', { text: appIdText }));
+      details.appendChild(createEl('dt', { text: '판정 이유' }));
+      details.appendChild(createEl('dd', { text: reasonText }));
+      details.appendChild(createEl('dt', { text: '판정 시각' }));
+      details.appendChild(createEl('dd', { text: formatCheckedAt(data.checkedAt) }));
+      container.appendChild(details);
+
+      return container;
+    },
     renderEvents() { return '학생 구현 대기: 본인 접속·XDR 기록을 연결하세요.'; },
     renderStatus() { return '학생 구현 대기: 기기·세션·알림과 연결 점검 상태를 구분하세요.'; },
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·OSV 출처·조회 시각·부분 결과·조회 실패를 구분하세요.'; },
