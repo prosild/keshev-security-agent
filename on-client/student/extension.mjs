@@ -1075,18 +1075,65 @@ export function createStudentView() {
         ? expl.status.trim()
         : 'idle';
       const mode = normalizeMode(expl.mode);
-      const eventId = typeof payload?.event?.id === 'string' && payload.event.id.trim().length > 0
-        ? payload.event.id.trim()
-        : null;
-      const rawSummary = expl?.data?.summary;
-      const summary = typeof rawSummary === 'string' && rawSummary.trim().length > 0
-        ? sanitizeSafeText(rawSummary)
+      const event = payload.event && typeof payload.event === 'object' ? payload.event : null;
+      const eventId = typeof event?.id === 'string' && event.id.trim().length > 0
+        ? event.id.trim()
         : null;
 
-      const isValidOk = status === 'ok' && eventId !== null && summary !== null;
+      let validationError = null;
+      let validatedData = null;
+
+      if (status === 'ok') {
+        const data = expl.data && typeof expl.data === 'object' ? expl.data : null;
+        const summary = typeof data?.summary === 'string' && data.summary.trim().length > 0
+          ? sanitizeSafeText(data.summary)
+          : null;
+        const evidenceRows = Array.isArray(event?.evidence) ? event.evidence : [];
+        const evidenceMap = new Map();
+        for (const row of evidenceRows) {
+          if (row && typeof row.id === 'string' && row.id.trim().length > 0) {
+            evidenceMap.set(row.id.trim(), sanitizeSafeText(row.text, '근거 내용 없음'));
+          }
+        }
+        const rawEvidenceIds = Array.isArray(data?.evidenceIds) ? data.evidenceIds : [];
+        const evidenceIds = rawEvidenceIds
+          .filter((id) => typeof id === 'string' && id.trim().length > 0)
+          .map((id) => id.trim());
+        const supportedActions = Array.isArray(event?.supportedActions) ? event.supportedActions : [];
+        const proposals = Array.isArray(data?.proposals) ? data.proposals : [];
+
+        if (!event || !eventId) {
+          validationError = { code: 'ON_AI_INVALID_INPUT', message: '보안 기록을 먼저 선택해야 설명을 확인할 수 있습니다.' };
+        } else if (!data) {
+          validationError = { code: 'ON_AI_INVALID_OUTPUT', message: 'AI 설명 응답 형식을 확인할 수 없습니다.' };
+        } else if (data.executed === true) {
+          validationError = { code: 'ON_AI_INVALID_OUTPUT', message: 'AI가 이미 실행했다고 답한 설명은 사용할 수 없습니다.' };
+        } else if (!summary) {
+          validationError = { code: 'ON_AI_INVALID_OUTPUT', message: 'AI 설명 요약이 비어 있어 사용할 수 없습니다.' };
+        } else if (evidenceIds.length === 0 || evidenceIds.length !== rawEvidenceIds.length) {
+          validationError = { code: 'ON_AI_INVALID_OUTPUT', message: '근거 ID가 부족하거나 형식이 올바르지 않아 설명을 사용할 수 없습니다 (근거 부족).' };
+        } else if (evidenceIds.some((id) => !evidenceMap.has(id))) {
+          validationError = { code: 'ON_AI_INVALID_OUTPUT', message: '설명에서 인용한 근거 ID가 현재 사건의 근거에 없어 사용할 수 없습니다 (근거가 맞지 않음).' };
+        } else {
+          const invalidProposal = proposals.some((p) => {
+            if (!p || typeof p !== 'object' || typeof p.action !== 'string' || !supportedActions.includes(p.action)) return true;
+            if (Array.isArray(p.evidenceIds)) {
+              if (p.evidenceIds.length === 0 || p.evidenceIds.some((id) => typeof id !== 'string' || !evidenceMap.has(id.trim()))) return true;
+            }
+            return false;
+          });
+          if (invalidProposal) {
+            validationError = { code: 'ON_AI_INVALID_OUTPUT', message: '제안된 조치 또는 근거 ID가 현재 사건과 맞지 않아 설명을 사용할 수 없습니다.' };
+          } else {
+            validatedData = { summary, evidenceIds, evidenceMap, proposals, supportedActions };
+          }
+        }
+      }
+
+      const isValidOk = status === 'ok' && validationError === null && validatedData !== null;
       const containerAttrs = {
         'data-student-explanation': 'rendered',
-        'data-student-status': isValidOk ? 'ok' : status,
+        'data-student-status': isValidOk ? 'ok' : (status === 'ok' ? 'error' : status),
         'data-student-mode': mode,
       };
       if (isValidOk) {
@@ -1095,14 +1142,21 @@ export function createStudentView() {
 
       const container = createEl('div', { attrs: containerAttrs });
       container.appendChild(createEl('div', { className: 'row' }, [
-        createEl('h3', { text: 'AI 사건 설명' }),
+        createEl('h3', { text: 'AI 설명 (참고용)' }),
         createModeBadge(mode),
       ]));
 
-      if (status === 'idle') {
+      if (status === 'error') {
+        const guide = resolveAiErrorGuide(expl.error);
+        const safeMessage = sanitizeSafeText(expl?.error?.message, 'AI 설명을 불러오지 못했습니다.');
         container.appendChild(createEl('p', {
-          className: 'state state-empty',
-          text: '사건 설명 대기 중입니다. 보안 기록에서 사건의 AI 설명을 요청하면 이 자리에 표시됩니다.',
+          className: 'state state-error',
+          text: `AI 설명 실패 [${guide.category}] (${guide.code}): ${safeMessage}`,
+          attrs: { role: 'alert' },
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: `${guide.guidance} 기록은 그대로입니다. AI 연결·응답 실패나 취소는 과제 실패가 아니며 사건 판정을 바꾸지 않습니다.`,
         }));
         return container;
       }
@@ -1110,46 +1164,128 @@ export function createStudentView() {
       if (status === 'loading') {
         container.appendChild(createEl('p', {
           className: 'state state-loading',
-          text: 'AI 사건 설명을 요청하는 중입니다.',
+          text: '설명 요청 중입니다. AI가 선택한 사건의 근거와 규칙을 읽고 있습니다.',
           attrs: { role: 'status' },
         }));
         container.appendChild(createEl('p', {
           className: 'muted',
-          text: '요청이 진행 중입니다. 필요하면 취소할 수 있으며 기존 보안 기록은 변경되지 않습니다.',
+          text: '필요하면 취소할 수 있으며, 다른 기록을 고르면 이전 응답은 반영되지 않습니다. 기존 보안 기록은 변경되지 않습니다.',
+        }));
+        return container;
+      }
+
+      if (!event || !eventId) {
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: '보안 기록에서 기록을 먼저 고르세요. 선택한 기록의 근거·규칙·상태에 맞춘 AI 설명만 표시됩니다.',
+        }));
+        return container;
+      }
+
+      if (status === 'idle') {
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: `선택한 사건(${eventId})의 설명 대기 중입니다. 보안 기록 목록에서 'AI 설명' 버튼을 눌러 요청하세요.`,
         }));
         return container;
       }
 
       if (!isValidOk) {
-        const fallbackErr = status === 'ok'
-          ? { code: 'ON_AI_INVALID_OUTPUT', message: '설명에 필요한 사건 ID 또는 요약 내용을 확인할 수 없습니다.' }
-          : expl.error;
-        const guide = resolveAiErrorGuide(fallbackErr);
-        const safeMessage = sanitizeSafeText(fallbackErr?.message, 'AI 사건 설명을 불러오지 못했습니다.');
+        const errInfo = validationError || { code: 'ON_AI_INVALID_OUTPUT', message: 'AI 설명을 확인할 수 없습니다.' };
         container.appendChild(createEl('p', {
           className: 'state state-error',
-          text: `[${guide.category}] (${guide.code}) ${safeMessage}`,
+          text: `AI 설명 실패 (${errInfo.code}): ${errInfo.message}`,
           attrs: { role: 'alert' },
         }));
         container.appendChild(createEl('p', {
           className: 'muted',
-          text: '기존 보안 기록은 그대로 유지됩니다. AI 설명 실패나 취소는 과제 실패가 아니며 사건 판정을 바꾸지 않습니다.',
+          text: '근거가 맞지 않는 설명은 표시하거나 지어내지 않습니다. 기록은 그대로입니다.',
         }));
         return container;
       }
 
-      const kv = createEl('dl', { className: 'kv' }, [
+      container.appendChild(createEl('dl', { className: 'kv' }, [
         createEl('dt', { text: '사건 ID' }),
         createEl('dd', { text: eventId }),
         createEl('dt', { text: '확인 시각' }),
         createEl('dd', { text: formatCheckedAt(payload.checkedAt) }),
-      ]);
-      container.appendChild(kv);
+      ]));
 
-      container.appendChild(createEl('p', { text: summary }));
+      container.appendChild(createEl('p', { text: validatedData.summary }));
       container.appendChild(createEl('p', {
         className: 'muted',
-        text: '참고용 AI 설명입니다. 사실 판단은 보안 기록의 근거·규칙·현재 상태를 기준으로 하며, AI가 조치를 자동 실행하지 않습니다.',
+        text: '아래 요약은 AI가 이 기록을 읽고 쓴 참고용 해석입니다. 사실 판단은 인용한 근거 글과 연동 시스템이 알려 준 현재 상태를 기준으로 합니다.',
+      }));
+
+      // 인용한 근거 ID — 근거 글
+      container.appendChild(createEl('h4', { text: '인용한 근거' }));
+      const evUl = createEl('ul', { className: 'plain-list' });
+      for (const refId of validatedData.evidenceIds) {
+        evUl.appendChild(createEl('li', {
+          text: `${refId} — ${validatedData.evidenceMap.get(refId)}`,
+        }));
+      }
+      container.appendChild(evUl);
+
+      // 현재 규칙 ID — 규칙 글
+      container.appendChild(createEl('h4', { text: '적용 규칙' }));
+      const rules = Array.isArray(event.rules) ? event.rules : [];
+      if (rules.length === 0) {
+        container.appendChild(createEl('p', { className: 'muted', text: '적용된 규칙이 없습니다.' }));
+      } else {
+        const rulesUl = createEl('ul', { className: 'plain-list' });
+        for (const rule of rules) {
+          const rId = sanitizeSafeText(rule?.id, '규칙');
+          const rText = sanitizeSafeText(rule?.text, '내용 없음');
+          rulesUl.appendChild(createEl('li', { text: `${rId} — ${rText}` }));
+        }
+        container.appendChild(rulesUl);
+      }
+
+      // 확인되지 않은 현재 상태 (unknown)
+      container.appendChild(createEl('h4', { text: '확인되지 않은 현재 상태' }));
+      const stateLabels = [
+        ['access', '접속'],
+        ['session', '세션'],
+        ['device', '기기'],
+      ];
+      const unknownEntries = stateLabels.filter(([key]) => event?.state?.[key] === 'unknown');
+      if (unknownEntries.length === 0) {
+        container.appendChild(createEl('p', { className: 'muted', text: '없음 (모든 상태가 확인됨)' }));
+      } else {
+        const unknownUl = createEl('ul', { className: 'plain-list' });
+        for (const [, label] of unknownEntries) {
+          unknownUl.appendChild(createEl('li', {
+            text: `${label}: 확인 불가(unknown)`,
+          }));
+        }
+        container.appendChild(unknownUl);
+      }
+
+      // 조치 제안 (실행 버튼 생성 금지)
+      container.appendChild(createEl('h4', { text: '조치 제안' }));
+      if (validatedData.proposals.length === 0) {
+        const noProposalText = validatedData.supportedActions.length === 0
+          ? '연동 시스템이 지원하는 조치가 없어 제안이 없습니다(정상).'
+          : 'AI가 이 기록에 맞는 조치를 제안하지 않았습니다.';
+        container.appendChild(createEl('p', { className: 'muted', text: noProposalText }));
+      } else {
+        const propUl = createEl('ul', { className: 'plain-list' });
+        for (const p of validatedData.proposals) {
+          const actionText = sanitizeSafeText(p.action, '알 수 없는 조치');
+          const reasonText = sanitizeSafeText(p.reason, '이유 없음');
+          const refNote = Array.isArray(p.evidenceIds) && p.evidenceIds.length > 0
+            ? ` (근거: ${p.evidenceIds.join(', ')})`
+            : '';
+          propUl.appendChild(createEl('li', {
+            text: `${actionText} — ${reasonText}${refNote} · 사람 확인이 필요하며 아직 실행되지 않았습니다.`,
+          }));
+        }
+        container.appendChild(propUl);
+      }
+      container.appendChild(createEl('p', {
+        className: 'muted',
+        text: 'AI는 조치를 자동 실행하지 않습니다.',
       }));
 
       return container;
