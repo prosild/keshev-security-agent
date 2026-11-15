@@ -1290,6 +1290,220 @@ export function createStudentView() {
 
       return container;
     },
-    renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 원천 효과·unknown을 구분하세요.'; },
+    renderAction(input) {
+      const payload = input && typeof input === 'object' ? input : {};
+      const rawStatus = typeof payload.status === 'string' && payload.status.trim().length > 0
+        ? payload.status.trim()
+        : 'idle';
+      const event = payload.event && typeof payload.event === 'object' ? payload.event : null;
+      const eventId = typeof event?.id === 'string' && event.id.trim().length > 0 ? event.id.trim() : null;
+      const actionId = typeof payload.actionId === 'string' && payload.actionId.trim().length > 0
+        ? payload.actionId.trim()
+        : null;
+      const target = payload.target && typeof payload.target === 'object' ? payload.target : null;
+      const receipt = payload.receipt && typeof payload.receipt === 'object' ? payload.receipt : null;
+      const observation = payload.observation && typeof payload.observation === 'object' ? payload.observation : null;
+
+      const receiptEventMismatch = Boolean(
+        receipt && typeof receipt.eventId === 'string' && eventId && receipt.eventId.trim() !== eventId,
+      );
+      const receiptActionMismatch = Boolean(
+        receipt && typeof receipt.actionId === 'string' && actionId && receipt.actionId.trim() !== actionId,
+      );
+      const intentMismatch = receiptEventMismatch || receiptActionMismatch;
+
+      let effectiveStatus = rawStatus;
+      if (intentMismatch) {
+        effectiveStatus = 'error';
+      } else if (rawStatus === 'succeeded' && observation?.effectApplied !== true) {
+        // 원천 관측(effectApplied === true) 없이는 절대 효과 확인(succeeded)으로 표시하지 않는다.
+        effectiveStatus = 'unknown';
+      }
+
+      const ACTION_STATUS_MAP = {
+        idle: {
+          className: 'state state-empty',
+          headline: '아직 미실행 (idle)',
+          note: 'AI 설명의 조치 제안이나 준비만으로는 보안 조치가 실행되지 않습니다. 준비가 열리면 제공 화면의 버튼을 직접 사용하세요.',
+        },
+        loading: {
+          className: 'state state-loading',
+          headline: '조치 준비 또는 결과 조회 중 (loading) · 완료 아님',
+          note: '서버에서 조치 준비 또는 연동 시스템 결과 조회를 진행하고 있습니다. 아직 완료나 효과 확인이 아닙니다.',
+        },
+        prepared: {
+          className: 'state state-empty',
+          headline: '준비됨 · 미실행 (prepared)',
+          note: '아직 실행되지 않았습니다. 아래 실제 대상과 확인 기한을 읽은 뒤 제공 화면의 「대상과 조치를 확인했으며 집행합니다」 버튼을 직접 눌러야 전송됩니다.',
+        },
+        executing: {
+          className: 'state state-loading',
+          headline: '서버에 전달 중 (executing) · 완료 아님',
+          note: '사람 확인 후 서버에 요청을 전달하는 중입니다. 결과가 아직 확인되지 않았으며 실행 성공이 아닙니다.',
+        },
+        pending: {
+          className: 'state state-loading',
+          headline: '서버 접수·처리 중 (pending) · 완료 아님',
+          note: '서버가 요청을 접수(ACK)해 처리 중입니다. 접수 응답(ACK)은 실제 효과 확인이나 완료가 아닙니다.',
+        },
+        succeeded: {
+          className: 'state state-ok',
+          headline: '효과 확인 (succeeded)',
+          note: '연동 시스템 관측에서 실제 효과 적용(effectApplied: true)이 확인됐습니다.',
+        },
+        denied: {
+          className: 'state state-error',
+          headline: '거절 (denied)',
+          note: '연동 시스템 정책이 이 조치를 허용하지 않아 거절됐습니다.',
+        },
+        failed: {
+          className: 'state state-error',
+          headline: '실패 (failed)',
+          note: '조치 처리에 실패했습니다. 원인과 기존 기록을 확인하세요.',
+        },
+        unknown: {
+          className: 'state state-error',
+          headline: '결과 불명 (unknown) · 효과 없음으로 판단 금지',
+          note: '성공이나 효과 없음으로 단정하지 마세요. 이미 전달된 조치일 수 있으므로 제공 화면의 결과 재조회 버튼으로 결과만 다시 확인하세요.',
+        },
+        expired: {
+          className: 'state state-error',
+          headline: '확인 기한 지남 (expired)',
+          note: '사람 확인 기한이 만료돼 이번 준비로는 집행할 수 없습니다. 필요하면 보안 기록에서 다시 준비하세요.',
+        },
+        error: {
+          className: 'state state-error',
+          headline: '요청 처리 안 됨 (error)',
+          note: '요청이 정상 처리되지 않았습니다. 아래 오류 안내를 확인하고 필요하면 제공 화면 버튼으로 다시 확인하세요.',
+        },
+      };
+
+      const statusInfo = Object.hasOwn(ACTION_STATUS_MAP, effectiveStatus)
+        ? ACTION_STATUS_MAP[effectiveStatus]
+        : ACTION_STATUS_MAP.unknown;
+
+      const containerAttrs = {
+        'data-student-action': 'rendered',
+        'data-student-action-status': effectiveStatus,
+      };
+      if (!intentMismatch) {
+        if (eventId) containerAttrs['data-student-action-event'] = eventId;
+        if (typeof receipt?.requestId === 'string' && receipt.requestId.trim().length > 0) {
+          containerAttrs['data-student-action-request'] = receipt.requestId.trim();
+        }
+      }
+
+      const container = createEl('div', { attrs: containerAttrs });
+      container.appendChild(createEl('h3', { text: '보안 조치 상태 · 원천 처리 결과' }));
+
+      const statusAttrs = (effectiveStatus === 'loading' || effectiveStatus === 'executing' || effectiveStatus === 'pending')
+        ? { role: 'status' }
+        : (statusInfo.className.includes('state-error') ? { role: 'alert' } : undefined);
+
+      container.appendChild(createEl('p', {
+        className: statusInfo.className,
+        text: statusInfo.headline,
+        attrs: statusAttrs,
+      }));
+      container.appendChild(createEl('p', {
+        className: 'muted',
+        text: statusInfo.note,
+      }));
+
+      if (intentMismatch) {
+        container.appendChild(createEl('p', {
+          className: 'state state-error',
+          text: '현재 선택된 사건·조치와 영수증 정보가 일치하지 않아 결과를 표시할 수 없습니다.',
+          attrs: { role: 'alert' },
+        }));
+      }
+
+      if (typeof payload.message === 'string' && payload.message.trim().length > 0) {
+        container.appendChild(createEl('p', {
+          text: sanitizeSafeText(payload.message),
+        }));
+      }
+
+      if (payload.error && typeof payload.error === 'object') {
+        const errCode = sanitizeSafeText(payload.error.code, 'ACTION_RESULT_UNVERIFIED');
+        const errMsg = sanitizeSafeText(payload.error.message, '조치 요청 또는 결과를 확인할 수 없습니다.');
+        container.appendChild(createEl('p', {
+          className: 'state state-error',
+          text: `${errCode}: ${errMsg}`,
+          attrs: { role: 'alert' },
+        }));
+      }
+
+      if (receipt?.superseded === true) {
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '이전 조회 결과는 최신 상태를 대신하지 않습니다 (superseded).',
+        }));
+      }
+
+      const evidenceIds = Array.isArray(event?.evidence)
+        ? event.evidence
+          .map((e) => (e && typeof e.id === 'string' ? e.id.trim() : ''))
+          .filter(Boolean)
+        : [];
+
+      const entries = [];
+      if (eventId) entries.push(['사건 ID (event.id)', eventId]);
+      if (evidenceIds.length > 0) entries.push(['근거 ID', evidenceIds.join(', ')]);
+      if (actionId) entries.push(['조치 (actionId)', sanitizeSafeText(actionId)]);
+      if (target) {
+        if (typeof target.id === 'string' && target.id.trim().length > 0) {
+          entries.push(['실제 대상 (target.id)', sanitizeSafeText(target.id)]);
+        }
+        if (target.generation != null) {
+          entries.push(['대상 세대 (target.generation)', String(target.generation)]);
+        }
+      }
+      if (typeof payload.confirmationExpiresAt === 'string' && payload.confirmationExpiresAt.trim().length > 0) {
+        entries.push(['확인 기한 (confirmationExpiresAt)', formatCheckedAt(payload.confirmationExpiresAt)]);
+      }
+      if (receipt) {
+        if (typeof receipt.requestId === 'string' && receipt.requestId.trim().length > 0) {
+          entries.push(['요청 ID (requestId)', sanitizeSafeText(receipt.requestId)]);
+        }
+        if (typeof receipt.receiptId === 'string' && receipt.receiptId.trim().length > 0) {
+          entries.push(['영수증 ID (receiptId)', sanitizeSafeText(receipt.receiptId)]);
+        }
+        if (receipt.version != null) {
+          entries.push(['버전 (version)', String(receipt.version)]);
+        }
+      }
+      if (observation) {
+        if (typeof observation.observedAt === 'string' && observation.observedAt.trim().length > 0) {
+          entries.push(['관측 시각 (observation.observedAt)', formatCheckedAt(observation.observedAt)]);
+        }
+        if (typeof observation.effectApplied === 'boolean') {
+          entries.push(['실제 효과 적용 (effectApplied)', `effectApplied: ${observation.effectApplied}`]);
+        }
+      }
+
+      if (entries.length > 0) {
+        const kv = createEl('dl', { className: 'kv' });
+        for (const [label, val] of entries) {
+          kv.appendChild(createEl('dt', { text: label }));
+          kv.appendChild(createEl('dd', { text: val }));
+        }
+        container.appendChild(kv);
+      }
+
+      if (effectiveStatus === 'idle' && (!event || !Array.isArray(event.supportedActions) || event.supportedActions.length === 0)) {
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '현재 기록에는 연동 시스템이 지원하는 조치가 없어 조치 준비 버튼이 표시되지 않는 것이 정상입니다.',
+        }));
+      }
+
+      container.appendChild(createEl('p', {
+        className: 'muted',
+        text: '집행·결과 재조회·취소는 위쪽 제공 화면의 버튼을 직접 사용하세요. 조치 취소 버튼은 이미 서버에 전달된 조치 효과를 되돌리지 않습니다.',
+      }));
+
+      return container;
+    },
   };
 }
