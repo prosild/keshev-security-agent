@@ -397,6 +397,113 @@ const RESOURCE_NAME_MAP = Object.freeze({
   diagnostics: '도움정보',
 });
 
+const AI_ERROR_GUIDES = Object.freeze({
+  ON_AI_PROVISIONING_PENDING: {
+    category: '권한 준비 중·확인 불가',
+    guidance: '운영 측 계정 연결 및 앱 권한 준비가 진행 중입니다. 학생 코드 문제가 아니므로 담당자에게 계정 연결과 앱 권한 확인을 요청하세요.',
+  },
+  ON_AI_AUTHORIZATION_CHANGED: {
+    category: '권한 변경됨·확인 불가',
+    guidance: '점검 도중 AI 이용 권한이 변경됐습니다. 담당자에게 현재 권한을 확인한 뒤 직접 다시 점검하세요.',
+  },
+  WB_CLCO_AUTH_REQUIRED: {
+    category: '인증 실패',
+    guidance: '계정 연결 인증을 다시 확인하세요. Workbench 열쇠나 토큰을 복사해 입력하지 마세요.',
+  },
+  WB_CLCO_ACCESS_BLOCKED: {
+    category: '접근 제한',
+    guidance: '학생 앱 AI 이용이 제한됐습니다. 담당자에게 운영 상태와 이용 권한을 확인하세요.',
+  },
+  SUBJECT_SCOPE_UNVERIFIED: {
+    category: '인증·대상 범위 확인 불가',
+    guidance: '현재 로그인과 프로젝트 연결을 확인할 수 없습니다. 계정 연결을 다시 확인하거나 담당자에게 문의하세요.',
+  },
+  WB_CLCO_COHORT_BUDGET_EXHAUSTED: {
+    category: '사용량 소진',
+    guidance: '반의 AI 사용량이 모두 소진됐습니다. 담당자에게 확인을 요청하세요.',
+  },
+  WB_CLCO_LIMIT_REACHED: {
+    category: '이용 한도 도달',
+    guidance: 'AI 이용 한도에 도달했습니다. 담당자에게 확인을 요청하세요.',
+  },
+  WB_CLCO_SESSION_CLOSED: {
+    category: '이용 시간 아님',
+    guidance: '현재 AI 이용 시간이 아닙니다. 안내된 이용 시간을 확인한 뒤 다시 시도하세요.',
+  },
+  WB_CLCO_RATE_LIMITED: {
+    category: '요청 제한',
+    guidance: '잠시 요청이 제한됐습니다. 잠시 뒤 위쪽 점검 버튼을 직접 눌러 다시 시도하세요.',
+  },
+  WB_CLCO_TIMEOUT: {
+    category: '시간 초과',
+    guidance: 'AI 응답 시간이 초과됐습니다. 자동 재시도하지 않으므로 필요할 때 직접 다시 점검하세요.',
+  },
+  REQUEST_TIMEOUT: {
+    category: '시간 초과',
+    guidance: '서버 AI 응답 시간이 초과됐습니다. 자동 재시도하지 않으므로 필요할 때 직접 다시 점검하세요.',
+  },
+  ENGINE_TIMEOUT: {
+    category: '시간 초과',
+    guidance: '서버 확인 시간이 초과됐습니다. 자동 재시도하지 않으므로 필요할 때 직접 다시 점검하세요.',
+  },
+  TIMEOUT: {
+    category: '시간 초과',
+    guidance: 'AI 응답 시간이 초과됐습니다. 자동 재시도하지 않으므로 필요할 때 직접 다시 점검하세요.',
+  },
+  NETWORK_ERROR: {
+    category: '네트워크 오류',
+    guidance: '로컬 서버 또는 네트워크 연결을 확인한 뒤 직접 다시 점검하세요.',
+  },
+  WB_CLCO_CANCELLED: {
+    category: '점검 취소됨',
+    guidance: '요청을 취소했습니다. 이전 응답·모델 수·성공 안내는 현재 결과가 아니므로 필요하면 직접 다시 점검하세요.',
+  },
+  CANCELLED: {
+    category: '점검 취소됨',
+    guidance: '요청을 취소했습니다. 이전 응답·모델 수·성공 안내는 현재 결과가 아니므로 필요하면 직접 다시 점검하세요.',
+  },
+  REQUEST_CANCELLED: {
+    category: '점검 취소됨',
+    guidance: '요청을 취소했습니다. 이전 응답·모델 수·성공 안내는 현재 결과가 아니므로 필요하면 직접 다시 점검하세요.',
+  },
+  ON_AI_MODEL_LIST_EMPTY: {
+    category: '사용 가능한 모델 없음',
+    guidance: '현재 앱 권한으로 쓸 수 있는 모델이 없습니다. 담당자에게 모델 허용 설정 확인을 요청하세요.',
+  },
+  MODEL_NOT_CONFIGURED: {
+    category: '모델 미설정',
+    guidance: '서버에 사용할 AI 모델이 설정되지 않았습니다. 담당자에게 모델 설정 확인을 요청하세요.',
+  },
+  ON_AI_INVALID_INPUT: {
+    category: '입력 근거 확인 불가',
+    guidance: '설명에 필요한 사건 근거와 규칙을 확인할 수 없습니다. 기존 기록은 그대로 유지됩니다.',
+  },
+  ON_AI_INVALID_OUTPUT: {
+    category: '응답 형식 확인 불가',
+    guidance: 'AI 설명 응답 형식이나 근거 ID가 현재 기록과 맞지 않습니다. 기존 기록은 그대로 유지됩니다.',
+  },
+  AI_REQUEST_UNVERIFIED: {
+    category: '확인 불가',
+    guidance: 'AI 연결 또는 응답을 확인할 수 없습니다. 계정 연결 상태를 확인하거나 담당자에게 문의하세요.',
+  },
+});
+
+function resolveAiErrorGuide(error) {
+  const rawCode = typeof error?.code === 'string' && error.code.trim().length > 0
+    ? sanitizeSafeText(error.code.trim(), 'AI_REQUEST_UNVERIFIED')
+    : 'AI_REQUEST_UNVERIFIED';
+  if (Object.hasOwn(AI_ERROR_GUIDES, rawCode)) {
+    return { code: rawCode, ...AI_ERROR_GUIDES[rawCode] };
+  }
+  if (rawCode.includes('TIMEOUT')) {
+    return { code: rawCode, ...AI_ERROR_GUIDES.TIMEOUT };
+  }
+  if (rawCode.includes('CANCEL')) {
+    return { code: rawCode, ...AI_ERROR_GUIDES.CANCELLED };
+  }
+  return { code: rawCode, ...AI_ERROR_GUIDES.AI_REQUEST_UNVERIFIED };
+}
+
 function pickSafeDiagnostics(data) {
   if (!data || typeof data !== 'object') return null;
   return {
@@ -850,8 +957,203 @@ export function createStudentView() {
       return container;
     },
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·OSV 출처·조회 시각·부분 결과·조회 실패를 구분하세요.'; },
-    renderAiConnection() { return '학생 구현 대기: 모델 응답 점검과 실제 사건 설명을 구분하고 AI 오류·취소·수동 복구를 안내하세요.'; },
-    renderExplanation() { return '학생 구현 대기: 선택한 사건의 근거·규칙·현재 상태와 AI 설명을 연결하세요. 제안은 자동 실행하지 않습니다.'; },
+    renderAiConnection(input) {
+      const payload = input && typeof input === 'object' ? input : {};
+      const status = typeof payload.status === 'string' && payload.status.trim().length > 0
+        ? payload.status.trim()
+        : 'idle';
+      const mode = normalizeMode(payload.mode);
+
+      const container = createEl('div', {
+        attrs: {
+          'data-student-ai-connection': 'rendered',
+          'data-student-status': status,
+          'data-student-mode': mode,
+        },
+      });
+
+      container.appendChild(createEl('div', { className: 'row' }, [
+        createEl('h3', { text: 'AI 연결 상태 (수업용 게이트)' }),
+        createModeBadge(mode),
+      ]));
+
+      if (status === 'idle') {
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: 'AI 연결 점검 전입니다. 위쪽 점검 버튼을 눌러 모델 응답을 확인하세요.',
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '계정 연결이나 설정값 존재만으로는 앱 이용 권한이나 사건 설명 성공이 확인되지 않습니다.',
+        }));
+        return container;
+      }
+
+      if (status === 'loading') {
+        container.appendChild(createEl('p', {
+          className: 'state state-loading',
+          text: 'AI 연결 점검 중입니다. 현재 로그인과 앱 권한으로 모델 응답을 확인하고 있습니다.',
+          attrs: { role: 'status' },
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '점검이 길어지면 취소 버튼으로 중단할 수 있으며, 자동으로 재시도하지 않습니다.',
+        }));
+        return container;
+      }
+
+      if (status === 'error') {
+        const guide = resolveAiErrorGuide(payload.error);
+        const safeMessage = sanitizeSafeText(payload?.error?.message, 'AI 연결 또는 응답을 확인할 수 없습니다.');
+        container.appendChild(createEl('p', {
+          className: 'state state-error',
+          text: `[${guide.category}] (${guide.code}) ${safeMessage}`,
+          attrs: { role: 'alert', 'data-student-ai-error-code': guide.code },
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: guide.guidance,
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '자동으로 다시 점검하지 않습니다. 다시 점검하려면 위쪽 점검 버튼을 직접 누르세요.',
+        }));
+        return container;
+      }
+
+      const data = payload.data && typeof payload.data === 'object' ? payload.data : null;
+      const authKind = data?.audienceAuthorization;
+      if (status !== 'ok' || !data || (authKind !== 'test' && authKind !== 'verified')) {
+        container.appendChild(createEl('p', {
+          className: 'state state-error',
+          text: 'AI 연결 점검 결과를 확인할 수 없습니다. 계정 연결 상태를 확인한 뒤 직접 다시 점검하세요.',
+          attrs: { role: 'alert' },
+        }));
+        return container;
+      }
+
+      const authText = authKind === 'test'
+        ? '시험 연결 점검(test) · 실제 앱 권한 승인이 아닌 연결 테스트 응답입니다.'
+        : '앱 권한 확인 후 점검(verified)';
+      const modelCountText = Number.isInteger(data.modelCount) && data.modelCount >= 0
+        ? String(data.modelCount)
+        : '확인 불가';
+
+      container.appendChild(createEl('p', {
+        className: authKind === 'verified' ? 'state state-ok' : 'state state-empty',
+        text: authText,
+        attrs: { 'data-student-ai-auth': authKind },
+      }));
+
+      const kv = createEl('dl', { className: 'kv' }, [
+        createEl('dt', { text: '점검 구분' }),
+        createEl('dd', { text: authKind === 'test' ? '시험 연결 점검(test)' : '앱 권한 확인 후 점검(verified)' }),
+        createEl('dt', { text: '응답 모델 수 (modelCount)' }),
+        createEl('dd', { text: modelCountText }),
+        createEl('dt', { text: '점검 시각 (checkedAt)' }),
+        createEl('dd', { text: formatCheckedAt(payload.checkedAt) }),
+      ]);
+      container.appendChild(kv);
+
+      const explanationNotice = payload.explanationAccepted === true
+        ? '사건 설명 실행이 확인됐습니다.'
+        : '연결(모델 목록) 점검만 완료했으며, 사건 설명은 아직 실행하지 않았습니다. 실제 사건 설명은 보안 기록에서 별도로 요청하세요.';
+      container.appendChild(createEl('p', {
+        className: 'muted',
+        text: explanationNotice,
+        attrs: { 'data-student-ai-explanation-accepted': String(Boolean(payload.explanationAccepted)) },
+      }));
+
+      return container;
+    },
+    renderExplanation(input) {
+      const payload = input && typeof input === 'object' ? input : {};
+      const expl = payload.explanation && typeof payload.explanation === 'object'
+        ? payload.explanation
+        : { status: 'idle', mode: 'unknown' };
+      const status = typeof expl.status === 'string' && expl.status.trim().length > 0
+        ? expl.status.trim()
+        : 'idle';
+      const mode = normalizeMode(expl.mode);
+      const eventId = typeof payload?.event?.id === 'string' && payload.event.id.trim().length > 0
+        ? payload.event.id.trim()
+        : null;
+      const rawSummary = expl?.data?.summary;
+      const summary = typeof rawSummary === 'string' && rawSummary.trim().length > 0
+        ? sanitizeSafeText(rawSummary)
+        : null;
+
+      const isValidOk = status === 'ok' && eventId !== null && summary !== null;
+      const containerAttrs = {
+        'data-student-explanation': 'rendered',
+        'data-student-status': isValidOk ? 'ok' : status,
+        'data-student-mode': mode,
+      };
+      if (isValidOk) {
+        containerAttrs['data-student-explanation-event'] = eventId;
+      }
+
+      const container = createEl('div', { attrs: containerAttrs });
+      container.appendChild(createEl('div', { className: 'row' }, [
+        createEl('h3', { text: 'AI 사건 설명' }),
+        createModeBadge(mode),
+      ]));
+
+      if (status === 'idle') {
+        container.appendChild(createEl('p', {
+          className: 'state state-empty',
+          text: '사건 설명 대기 중입니다. 보안 기록에서 사건의 AI 설명을 요청하면 이 자리에 표시됩니다.',
+        }));
+        return container;
+      }
+
+      if (status === 'loading') {
+        container.appendChild(createEl('p', {
+          className: 'state state-loading',
+          text: 'AI 사건 설명을 요청하는 중입니다.',
+          attrs: { role: 'status' },
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '요청이 진행 중입니다. 필요하면 취소할 수 있으며 기존 보안 기록은 변경되지 않습니다.',
+        }));
+        return container;
+      }
+
+      if (!isValidOk) {
+        const fallbackErr = status === 'ok'
+          ? { code: 'ON_AI_INVALID_OUTPUT', message: '설명에 필요한 사건 ID 또는 요약 내용을 확인할 수 없습니다.' }
+          : expl.error;
+        const guide = resolveAiErrorGuide(fallbackErr);
+        const safeMessage = sanitizeSafeText(fallbackErr?.message, 'AI 사건 설명을 불러오지 못했습니다.');
+        container.appendChild(createEl('p', {
+          className: 'state state-error',
+          text: `[${guide.category}] (${guide.code}) ${safeMessage}`,
+          attrs: { role: 'alert' },
+        }));
+        container.appendChild(createEl('p', {
+          className: 'muted',
+          text: '기존 보안 기록은 그대로 유지됩니다. AI 설명 실패나 취소는 과제 실패가 아니며 사건 판정을 바꾸지 않습니다.',
+        }));
+        return container;
+      }
+
+      const kv = createEl('dl', { className: 'kv' }, [
+        createEl('dt', { text: '사건 ID' }),
+        createEl('dd', { text: eventId }),
+        createEl('dt', { text: '확인 시각' }),
+        createEl('dd', { text: formatCheckedAt(payload.checkedAt) }),
+      ]);
+      container.appendChild(kv);
+
+      container.appendChild(createEl('p', { text: summary }));
+      container.appendChild(createEl('p', {
+        className: 'muted',
+        text: '참고용 AI 설명입니다. 사실 판단은 보안 기록의 근거·규칙·현재 상태를 기준으로 하며, AI가 조치를 자동 실행하지 않습니다.',
+      }));
+
+      return container;
+    },
     renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 원천 효과·unknown을 구분하세요.'; },
   };
 }
