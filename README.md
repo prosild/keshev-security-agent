@@ -1,7 +1,9 @@
 # 케셰브(Keshev) 보안 Agent (ALEPH 방어전 13~22단계)
 
 로컬 웹 UI(`http://127.0.0.1:5189/`)에서 사용자 로그인·기기·세션 상태, 업무 앱 접속 판정, 보안 기록·AI 사건 설명, 보안 조치 상태, 설치 패키지 OSV 취약점 조회 결과를 확인하는 보안 Agent 프로젝트입니다.  
-상세한 실행 설명서, 오류 코드별 복구 표, 확인·미확인(UNV) 목록은 [on-client/docs/STUDENT_RUNBOOK.md](on-client/docs/STUDENT_RUNBOOK.md) 에 정리되어 있습니다.
+상세한 실행 설명서, 오류 코드별 복구 표, 확인·미확인(UNV) 목록은 [on-client/docs/STUDENT_RUNBOOK.md](on-client/docs/STUDENT_RUNBOOK.md) 에, 새 빈 폴더 클린 재현 기록과 데이터 보존·릴리스 버전 표기는 [on-client/docs/REPRODUCTION_RECORD.md](on-client/docs/REPRODUCTION_RECORD.md) 에 정리되어 있습니다.
+
+- **현재 버전 상태**: `0.2.21-verifying` (검증 중인 버전 / pre-release — 실제 SDP·AI 권한·19단계 실집행·OSV 실조회 미완료로 `v1.0` 아님)
 
 ---
 
@@ -70,12 +72,13 @@ flowchart LR
 - **제공 원본 유지 (`on-client/.on-starter-manifest.json` 75개 중 74개)**: `on-client/src/*`, `on-client/public/*`, `on-client/tools/*`, `on-client/README.md`, 기존 `on-client/docs/*` 는 수정하지 않았습니다.
 - **학생 구현 코드 (`on-client/student/extension.mjs`)**:
   - `renderIdentity` (13단계), `renderDecision` (14단계), `renderEvents` (15·16단계), `renderStatus` (16단계), `renderAiConnection` (17단계), `renderExplanation` (17·18단계), `renderAction` (19단계), `renderVulnerabilities` (20단계)
-- **학생 작성 문서**: `README.md`, `on-client/docs/STUDENT_RUNBOOK.md`
+- **학생 작성 문서**: `README.md`, `on-client/docs/STUDENT_RUNBOOK.md`, `on-client/docs/REPRODUCTION_RECORD.md`
 
 ---
 
-## 5. 장애 안내 및 확인·미확인 범위 요약
+## 5. 장애 안내 · 데이터 보존 · 확인·미확인 범위 요약
 
 - **`ENGINE_NOT_CONNECTED` / `ON_AI_PROVISIONING_PENDING` / `PROJECT_NOT_CONFIGURED`**: 각각 어댑터 미연결, 운영 측 AI 권한 준비 중, 조회 대상 프로젝트 미설정 상태이며 정상·취약점 없음·실행 성공으로 표시하지 않습니다. 오류 코드별 복구 표는 [on-client/docs/STUDENT_RUNBOOK.md](on-client/docs/STUDENT_RUNBOOK.md) 7장을 참고하세요.
-- **확인 완료**: `npm run check`, `npm start`/`npm run demo` 기동 및 `/api/diagnostics` 응답, 데모 모드 브라우저 렌더링(13~20단계), 모의 데이터 단위 테스트.
+- **데이터 보존**: 학생 코드·문서는 Git(`origin/main`)으로 관리하며, 로컬 전용 인증·자격(`native.json`, `.env`, 사용자 폴더 보관함)은 Git에 포함하지 않고 새 환경에서 무작정 복사하지 않습니다. 상세 절차와 제한은 [on-client/docs/REPRODUCTION_RECORD.md](on-client/docs/REPRODUCTION_RECORD.md) 5장을 참고하세요.
+- **확인 완료 (학생 진술)**: `npm run check`, `npm start`/`npm run demo` 기동·종료·재실행 및 `/api/diagnostics` 응답, 새 빈 폴더 클린 `git clone` 재현, 데모 모드 브라우저 렌더링(13~20단계), 모의 데이터 단위 테스트. *(데모 시연과 AI 원문 검토 통과는 실제 운영 실행 검증이 아닙니다.)*
 - **미확인 / 기다림(UNV)**: 운영 SDP `connected` 실제 연동, 알레프게이트/CLCO OAuth 승인 후 `verified` 모델 점검 및 실제 사건 설명 `ok` 응답, 지원 조치 집행·관측, 승인 패키지 및 `package-lock.json` 기반 OSV 실조회, `tools/start-alekov.ps1`·`npm run package-app` 직접 실행.
