@@ -25,8 +25,8 @@
 
 ## 3. 폴더 구조 및 작업 위치
 
-- **Git 저장소 최상위(루트)**: `C:\Users\pgils\aleph_defense` (커밋 및 제출 기준 위치)
-- **앱 실행 작업 폴더**: `C:\Users\pgils\aleph_defense\on-client`
+- **Git 저장소 최상위(루트)**: `<프로젝트 폴더>` (저장소를 받은 최상위 폴더, 커밋 및 제출 기준 위치)
+- **앱 실행 작업 폴더**: `<프로젝트 폴더>/on-client`
 
 ```text
 aleph_defense/                  # Git 루트
@@ -52,9 +52,9 @@ aleph_defense/                  # Git 루트
 ## 4. 설치 · 실행 · 종료 · 재실행 절차
 
 ### 4.1 사전 확인
-1. 새 PowerShell 창을 열고 앱 폴더로 이동합니다.
+1. 저장소 최상위 폴더에서 새 PowerShell 창을 열고 앱 폴더(`on-client`)로 이동합니다.
    ```powershell
-   cd C:\Users\pgils\aleph_defense\on-client
+   cd on-client
    ```
 2. Node.js 버전 및 학생 코드 문법을 확인합니다. (외부 npm 패키지가 없으므로 `npm install`은 필요하지 않습니다.)
    ```powershell
@@ -162,7 +162,7 @@ flowchart LR
 | `WB_CLCO_COHORT_BUDGET_EXHAUSTED` / `WB_CLCO_LIMIT_REACHED` / `WB_CLCO_SESSION_CLOSED` / `ON_AI_MODEL_LIST_EMPTY` | 반 사용량 소진, 한도 도달, 이용 시간 외, 허용 모델 없음 | `#student-ai-connection` | 이용 시간 확인 또는 담당자에게 반 한도/모델 허용 설정을 문의합니다. |
 | `ON_AI_INVALID_OUTPUT` / `근거가 맞지 않음` | AI 응답 형식이 잘못됐거나 인용 근거 ID가 사건 근거에 없음 | `#student-explanation` | 잘못된 설명은 표시하지 않고 기존 보안 기록을 그대로 유지합니다. 필요 시 다른 기록을 확인하거나 재요청합니다. |
 | `PROJECT_NOT_CONFIGURED` / `NO_APPROVED_PACKAGES` / `LOCKFILE_UNVERIFIABLE` | 조회 대상 프로젝트/승인 패키지 미설정 또는 `package-lock.json` 확인 불가 | `#student-vulnerabilities` | 미조회·확인 불가 상태이므로 "취약점 없음"으로 해석하지 않습니다. `ON_PROJECT_DIRECTORY` / `ON_APPROVED_PUBLIC_PACKAGES` 설정은 운영자 안내를 따릅니다. |
-| 포트 충돌 (`EADDRINUSE` 등) | `5189` 포트를 다른 프로세스가 사용 중 | PowerShell 서버 실행 창 | 기존 프로그램을 강제 종료하지 말고 `PORT` 환경 변수나 `tools/start-alekov.ps1 -Port 5190` 등을 사용해 다른 포트로 실행합니다. |
+| 포트 충돌 (`EADDRINUSE` 등) | `5189` 포트를 다른 프로세스가 사용 중 | PowerShell 서버 실행 창 | 기존 프로그램을 강제 종료하지 말고 `$env:ON_PORT='5190'; npm start` 처럼 `ON_PORT` 환경 변수를 지정하거나, 실행 도구(`powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-alekov.ps1 -Port 5190`)의 `-Port` 인자를 사용해 `http://127.0.0.1:5190/` 으로 실행합니다. (`src/server.mjs`는 `ON_PORT` 환경 변수만 읽습니다.) |
 
 ---
 

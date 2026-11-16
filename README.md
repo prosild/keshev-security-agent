@@ -17,9 +17,9 @@
 
 ## 2. 빠른 실행 및 종료 절차
 
-1. 새 PowerShell 창에서 앱 폴더(`on-client`)로 이동합니다.
+1. 저장소 최상위 폴더에서 새 PowerShell 창을 열고 앱 폴더(`on-client`)로 이동합니다.
    ```powershell
-   cd C:\Users\pgils\aleph_defense\on-client
+   cd on-client
    ```
 2. 학생 코드 구문을 점검합니다.
    ```powershell
